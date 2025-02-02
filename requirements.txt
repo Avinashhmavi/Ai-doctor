@@ -1,0 +1,9 @@
+python-dotenv
+groq
+gtts
+elevenlabs
+speechrecognition
+pydub
+logging
+pyaudio
+numpy
