@@ -5,5 +5,8 @@ elevenlabs
 speechrecognition
 pydub
 logging
-pyaudio
+numpy
+streamlit
+python-dotenv
+openai-whisper
 numpy
