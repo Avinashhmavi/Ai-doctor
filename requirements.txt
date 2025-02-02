@@ -10,5 +10,4 @@ streamlit
 python-dotenv
 openai-whisper
 numpy
-base64
 requests
