@@ -11,3 +11,4 @@ python-dotenv
 openai-whisper
 numpy
 requests
+pyaudio
