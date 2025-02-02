@@ -1,4 +1,4 @@
-###🚀 AI Doctor 2.0: Voice & Vision
+🚀 AI Doctor 2.0: Voice & Vision
 
 An AI-powered medical assistant that can analyze images, respond to text and voice queries, and generate speech-based answers. Built with Streamlit, Groq’s LLaMA 3, and ElevenLabs, this app offers a seamless experience for interactive AI-driven medical insights.
 
