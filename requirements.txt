@@ -1,12 +1,9 @@
-streamlit
 python-dotenv
 groq
 gtts
 elevenlabs
 speechrecognition
 pydub
-openai-whisper
+logging
+pyaudio
 numpy
-io
-base64
-requests
