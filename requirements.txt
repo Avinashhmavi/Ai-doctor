@@ -7,7 +7,6 @@ speechrecognition
 pydub
 openai-whisper
 numpy
-Pillow
 io
 base64
 requests
