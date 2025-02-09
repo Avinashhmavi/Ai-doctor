@@ -5,4 +5,3 @@ gtts
 elevenlabs
 speechrecognition
 pydub
-st-audiorec
