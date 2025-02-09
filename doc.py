@@ -6,6 +6,9 @@ from groq import Groq
 from gtts import gTTS
 import elevenlabs
 import speech_recognition as sr
+from io import BytesIO
+from pydub import AudioSegment
+import st_audiorec  # Custom Streamlit component for browser-based recording
 
 # Load environment variables
 load_dotenv()
@@ -55,28 +58,29 @@ def text_to_speech(input_text, output_filepath):
     elevenlabs.save(audio, output_filepath)
     return output_filepath
 
-# Function to transcribe uploaded audio file
-def transcribe_uploaded_audio():
-    st.info("Upload an audio file for transcription:")
-    uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3", "m4a"])
+# Function to transcribe recorded audio from browser
+def transcribe_audio(audio_data):
+    recognizer = sr.Recognizer()
     
-    if uploaded_audio is not None:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(uploaded_audio) as source:
-            audio_data = recognizer.record(source)
-            st.success("Audio uploaded successfully. Processing transcription...")
-            try:
-                return recognizer.recognize_google(audio_data)
-            except sr.UnknownValueError:
-                st.error("Could not understand the audio.")
-            except sr.RequestError as e:
-                st.error(f"Could not request results from Google Speech Recognition service; {e}")
-    else:
-        return None
+    try:
+        # Convert to WAV for speech recognition
+        audio_segment = AudioSegment.from_file(BytesIO(audio_data), format="wav")
+        wav_io = BytesIO()
+        audio_segment.export(wav_io, format="wav")
+        wav_io.seek(0)
+        
+        with sr.AudioFile(wav_io) as source:
+            audio = recognizer.record(source)
+            return recognizer.recognize_google(audio)
+    except sr.UnknownValueError:
+        st.error("Sorry, I couldn't understand the audio.")
+    except sr.RequestError as e:
+        st.error(f"Speech recognition error: {e}")
+    return None
 
 # Streamlit App
 def main():
-    st.title("AI Doctor 2.0: Voice and Vision")
+    st.title("AI Doctor 2.0: Live Voice and Vision")
     
     uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"])
     encoded_image = None
@@ -116,25 +120,30 @@ def main():
         response_audio_path = text_to_speech(ai_response, "ai_response.mp3")
         st.audio(response_audio_path)
 
-    # Voice Input for Questions (Using Uploaded Audio)
-    st.subheader("Or upload an audio file to ask a question:")
-    user_voice_input = transcribe_uploaded_audio()
+    # Live Voice Recording Section
+    st.subheader("Or ask using your voice:")
+    audio_bytes = st_audiorec.st_audiorec()  # Record audio directly in the browser
 
-    if user_voice_input:
-        st.subheader("Transcription:")
-        st.write(user_voice_input)
+    if audio_bytes is not None:
+        st.audio(audio_bytes, format='audio/wav')
+        
+        user_voice_input = transcribe_audio(audio_bytes)
+        
+        if user_voice_input:
+            st.subheader("Transcription:")
+            st.write(user_voice_input)
 
-        if encoded_image:
-            ai_voice_response = analyze_image_and_voice(user_voice_input, model, encoded_image)
-        else:
-            ai_voice_response = generate_ai_response(user_voice_input)
+            if encoded_image:
+                ai_voice_response = analyze_image_and_voice(user_voice_input, model, encoded_image)
+            else:
+                ai_voice_response = generate_ai_response(user_voice_input)
 
-        st.subheader("AI Response:")
-        st.write(ai_voice_response)
+            st.subheader("AI Response:")
+            st.write(ai_voice_response)
 
-        # Convert response to speech
-        voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
-        st.audio(voice_audio_path)
+            # Convert response to speech
+            voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
+            st.audio(voice_audio_path)
 
 if __name__ == "__main__":
     main()
