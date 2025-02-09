@@ -12,6 +12,8 @@ from io import BytesIO
 import platform
 import subprocess
 import speech_recognition as sr
+import warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # Load environment variables
 load_dotenv()
