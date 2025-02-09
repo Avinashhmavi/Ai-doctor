@@ -3,7 +3,6 @@ python-dotenv
 groq
 gtts
 elevenlabs
+speechrecognition
 pydub
-SpeechRecognition
-sounddevice
-soundfile
+st-audiorec
