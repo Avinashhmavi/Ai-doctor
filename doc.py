@@ -5,16 +5,18 @@ import base64
 from groq import Groq
 from gtts import gTTS
 import elevenlabs
-import speech_recognition as sr
+import sounddevice as sd
+import soundfile as sf
 from pydub import AudioSegment
 from io import BytesIO
 import platform
 import subprocess
+import speech_recognition as sr
 
 # Load environment variables
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+ELEVENLABS_API_KEY = st.secrets["ELEVENLABS_API_KEY"]
 
 # Initialize AI clients
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -59,16 +61,28 @@ def text_to_speech(input_text, output_filepath):
     elevenlabs.save(audio, output_filepath)
     return output_filepath
 
-# Function to record user's speech and transcribe it
+# Function to record user's speech using sounddevice and transcribe it
 def record_and_transcribe():
     recognizer = sr.Recognizer()
+    fs = 44100  # Sample rate
+    duration = 10  # Recording duration in seconds
+
+    st.info("Recording for 10 seconds. Speak now!")
     try:
-        with sr.Microphone() as source:
-            st.info("Adjusting for ambient noise... Speak now!")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-            audio_data = recognizer.listen(source, timeout=10, phrase_time_limit=10)
+        # Record audio from the microphone
+        recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
+        sd.wait()  # Wait until recording is finished
+
+        # Save the recording to a WAV file
+        audio_file = 'recorded_audio.wav'
+        sf.write(audio_file, recording, fs)
+
+        # Transcribe the recorded audio
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
             st.success("Recording complete. Processing...")
             return recognizer.recognize_google(audio_data)
+
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
