@@ -5,15 +5,7 @@ import base64
 from groq import Groq
 from gtts import gTTS
 import elevenlabs
-import sounddevice as sd
-import soundfile as sf
-from pydub import AudioSegment
-from io import BytesIO
-import platform
-import subprocess
 import speech_recognition as sr
-import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # Load environment variables
 load_dotenv()
@@ -63,30 +55,23 @@ def text_to_speech(input_text, output_filepath):
     elevenlabs.save(audio, output_filepath)
     return output_filepath
 
-# Function to record user's speech using sounddevice and transcribe it
-def record_and_transcribe():
-    recognizer = sr.Recognizer()
-    fs = 44100  # Sample rate
-    duration = 10  # Recording duration in seconds
-
-    st.info("Recording for 10 seconds. Speak now!")
-    try:
-        # Record audio from the microphone
-        recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
-        sd.wait()  # Wait until recording is finished
-
-        # Save the recording to a WAV file
-        audio_file = 'recorded_audio.wav'
-        sf.write(audio_file, recording, fs)
-
-        # Transcribe the recorded audio
-        with sr.AudioFile(audio_file) as source:
+# Function to transcribe uploaded audio file
+def transcribe_uploaded_audio():
+    st.info("Upload an audio file for transcription:")
+    uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3", "m4a"])
+    
+    if uploaded_audio is not None:
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(uploaded_audio) as source:
             audio_data = recognizer.record(source)
-            st.success("Recording complete. Processing...")
-            return recognizer.recognize_google(audio_data)
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+            st.success("Audio uploaded successfully. Processing transcription...")
+            try:
+                return recognizer.recognize_google(audio_data)
+            except sr.UnknownValueError:
+                st.error("Could not understand the audio.")
+            except sr.RequestError as e:
+                st.error(f"Could not request results from Google Speech Recognition service; {e}")
+    else:
         return None
 
 # Streamlit App
@@ -131,25 +116,25 @@ def main():
         response_audio_path = text_to_speech(ai_response, "ai_response.mp3")
         st.audio(response_audio_path)
 
-    # Voice Input for Questions
-    if st.button("Ask Using Voice"):
-        user_voice_input = record_and_transcribe()
+    # Voice Input for Questions (Using Uploaded Audio)
+    st.subheader("Or upload an audio file to ask a question:")
+    user_voice_input = transcribe_uploaded_audio()
 
-        if user_voice_input:
-            st.subheader("Transcription:")
-            st.write(user_voice_input)
+    if user_voice_input:
+        st.subheader("Transcription:")
+        st.write(user_voice_input)
 
-            if encoded_image:
-                ai_voice_response = analyze_image_and_voice(user_voice_input, model, encoded_image)
-            else:
-                ai_voice_response = generate_ai_response(user_voice_input)
+        if encoded_image:
+            ai_voice_response = analyze_image_and_voice(user_voice_input, model, encoded_image)
+        else:
+            ai_voice_response = generate_ai_response(user_voice_input)
 
-            st.subheader("AI Response:")
-            st.write(ai_voice_response)
+        st.subheader("AI Response:")
+        st.write(ai_voice_response)
 
-            # Convert response to speech
-            voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
-            st.audio(voice_audio_path)
+        # Convert response to speech
+        voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
+        st.audio(voice_audio_path)
 
 if __name__ == "__main__":
     main()
