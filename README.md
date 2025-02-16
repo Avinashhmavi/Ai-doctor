@@ -51,7 +51,7 @@ Before running the application, ensure you have the following prerequisites inst
 ### 2. **Install Dependencies**
    - Clone this repository:
      ```bash
-     git clone https://github.com/your-repo/ai-doctor.git
+     git clone https://github.com/Avinashhmavi/Ai-doctor.git
      cd ai-doctor
      ```
    - Create a virtual environment (optional but recommended):
