@@ -76,7 +76,7 @@ def transcribe_uploaded_audio():
 
 # Streamlit App
 def main():
-    st.title("AI Doctor 2.0: Voice and Vision")
+    st.title("🧑‍⚕️🩺AI Doctor 2.0: Voice and Vision")
     
     uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"])
     encoded_image = None
