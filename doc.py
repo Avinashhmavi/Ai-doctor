@@ -67,11 +67,11 @@ def text_to_speech(input_text):
         st.error(f"Error during text-to-speech conversion with gTTS: {e}")
         return None
 
-# Function to play audio automatically
+# Function to play audio automatically with controls
 def play_audio(audio_base64):
     if audio_base64:
         audio_html = f"""
-        <audio autoplay>
+        <audio autoplay controls>
             <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
             Your browser does not support the audio element.
         </audio>
@@ -114,7 +114,7 @@ def main():
         analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
         st.write(analysis_result)
 
-        # Convert analysis result to speech and play automatically
+        # Convert analysis result to speech and play automatically with controls
         audio_base64 = text_to_speech(analysis_result)
         play_audio(audio_base64)
 
@@ -134,7 +134,7 @@ def main():
         st.subheader("AI Response:")
         st.write(ai_response)
 
-        # Convert response to speech and play automatically
+        # Convert response to speech and play automatically with controls
         response_audio_base64 = text_to_speech(ai_response)
         play_audio(response_audio_base64)
 
@@ -154,7 +154,7 @@ def main():
         st.subheader("AI Response:")
         st.write(ai_voice_response)
 
-        # Convert response to speech and play automatically
+        # Convert response to speech and play automatically with controls
         voice_audio_base64 = text_to_speech(ai_voice_response)
         play_audio(voice_audio_base64)
 
