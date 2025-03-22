@@ -6,6 +6,7 @@ from groq import Groq
 from gtts import gTTS
 import speech_recognition as sr
 from tempfile import NamedTemporaryFile
+import re
 
 # Load environment variables
 load_dotenv()
@@ -45,15 +46,27 @@ def generate_ai_response(user_query):
     )
     return chat_completion.choices[0].message.content
 
+# Function to clean text by removing special characters for speech
+def clean_text_for_speech(text):
+    # Remove special characters but keep spaces and basic punctuation for natural flow
+    # This regex removes: , ; * ( ) [ ] { } ! ? @ # $ % ^ & + = _ - " ' ` ~ |
+    cleaned_text = re.sub(r'[,\;\*\(\)\[\]\{\}!?@#$%^&+=_"\'`~|]', '', text)
+    # Replace multiple spaces with a single space
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    return cleaned_text
+
 # Function to convert AI response to speech using gTTS and return base64 audio
 def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
         st.error("Invalid input text for speech conversion.")
         return None
     
+    # Clean the text before converting to speech
+    cleaned_text = clean_text_for_speech(input_text)
+    
     try:
-        # Generate audio with gTTS
-        tts = gTTS(text=input_text, lang='en')
+        # Generate audio with gTTS using cleaned text
+        tts = gTTS(text=cleaned_text, lang='en')
         # Save to a temporary file
         with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
             tts.save(temp_file.name)
