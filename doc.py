@@ -45,8 +45,8 @@ def generate_ai_response(user_query):
     )
     return chat_completion.choices[0].message.content
 
-# Function to convert AI response to speech using gTTS
-def text_to_speech(input_text, output_filename):
+# Function to convert AI response to speech using gTTS and return base64 audio
+def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
         st.error("Invalid input text for speech conversion.")
         return None
@@ -54,13 +54,29 @@ def text_to_speech(input_text, output_filename):
     try:
         # Generate audio with gTTS
         tts = gTTS(text=input_text, lang='en')
-        # Use a temporary file for Streamlit compatibility
+        # Save to a temporary file
         with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
             tts.save(temp_file.name)
-            return temp_file.name
+            # Read the audio file and encode it to base64
+            with open(temp_file.name, "rb") as audio_file:
+                audio_bytes = audio_file.read()
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            os.unlink(temp_file.name)  # Clean up temporary file
+            return audio_base64
     except Exception as e:
         st.error(f"Error during text-to-speech conversion with gTTS: {e}")
         return None
+
+# Function to play audio automatically
+def play_audio(audio_base64):
+    if audio_base64:
+        audio_html = f"""
+        <audio autoplay>
+            <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+            Your browser does not support the audio element.
+        </audio>
+        """
+        st.markdown(audio_html, unsafe_allow_html=True)
 
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
@@ -98,11 +114,9 @@ def main():
         analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
         st.write(analysis_result)
 
-        # Convert analysis result to speech
-        audio_path = text_to_speech(analysis_result, "ai_analysis.mp3")
-        if audio_path:
-            st.audio(audio_path)
-            os.unlink(audio_path)  # Clean up temporary file
+        # Convert analysis result to speech and play automatically
+        audio_base64 = text_to_speech(analysis_result)
+        play_audio(audio_base64)
 
     # Interaction Section
     st.subheader("Ask a question (Text or Voice)")
@@ -120,11 +134,9 @@ def main():
         st.subheader("AI Response:")
         st.write(ai_response)
 
-        # Convert response to speech
-        response_audio_path = text_to_speech(ai_response, "ai_response.mp3")
-        if response_audio_path:
-            st.audio(response_audio_path)
-            os.unlink(response_audio_path)  # Clean up temporary file
+        # Convert response to speech and play automatically
+        response_audio_base64 = text_to_speech(ai_response)
+        play_audio(response_audio_base64)
 
     # Voice Input for Questions (Using Uploaded Audio)
     st.subheader("Or upload an audio file to ask a question:")
@@ -142,11 +154,9 @@ def main():
         st.subheader("AI Response:")
         st.write(ai_voice_response)
 
-        # Convert response to speech
-        voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
-        if voice_audio_path:
-            st.audio(voice_audio_path)
-            os.unlink(voice_audio_path)  # Clean up temporary file
+        # Convert response to speech and play automatically
+        voice_audio_base64 = text_to_speech(ai_voice_response)
+        play_audio(voice_audio_base64)
 
 if __name__ == "__main__":
     main()
