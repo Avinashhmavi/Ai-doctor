@@ -16,7 +16,7 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Custom CSS for vibrant styling
+# Custom CSS for vibrant styling and centering AI response
 st.markdown("""
     <style>
     .main {
@@ -56,6 +56,14 @@ st.markdown("""
     .stError {
         background-color: #ffe6e6;
         color: #c0392b;
+    }
+    .ai-response {
+        text-align: center;
+        margin: 20px 0;
+    }
+    .ai-response audio {
+        display: block;
+        margin: 10px auto;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -180,7 +188,7 @@ def main():
                 initial_query = "Describe the condition in this image."
                 model = "llama-3.2-90b-vision-preview"
                 analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
-                st.write(analysis_result)
+                st.markdown(f'<div class="ai-response">{analysis_result}</div>', unsafe_allow_html=True)
                 audio_base64 = text_to_speech(analysis_result)
                 play_audio(audio_base64)
 
@@ -188,9 +196,13 @@ def main():
     st.markdown("---")
     st.subheader("💬 Ask a Question (Text or Upload Audio)")
 
+    # Use session state to store responses and manage input
+    if 'responses' not in st.session_state:
+        st.session_state.responses = []
+
     col1, col2 = st.columns([2, 1])
     with col1:
-        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?")
+        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?", key="text_input")
     with col2:
         if st.button("Submit", key="text_submit"):
             if user_text_input:
@@ -199,28 +211,28 @@ def main():
                         ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
                     else:
                         ai_response = generate_ai_response(user_text_input)
-                    st.subheader("AI Response:")
-                    st.write(ai_response)
-                    response_audio_base64 = text_to_speech(ai_response)
-                    play_audio(response_audio_base64)
-            else:
-                st.warning("Please enter a question! ⚠️")
+                    st.session_state.responses.append((user_text_input, ai_response))
+                    # Clear the input by resetting the key (Streamlit will generate a new widget)
+                    st.session_state.text_input = ""
+
+    # Display previous responses
+    for i, (question, response) in enumerate(st.session_state.responses):
+        st.markdown(f"**Q{i+1}:** {question}")
+        st.markdown(f'<div class="ai-response">{response}</div>', unsafe_allow_html=True)
+        audio_base64 = text_to_speech(response)
+        play_audio(audio_base64)
+        st.markdown("---")
 
     # Audio Upload Section
     with st.expander("🎙️ Upload an Audio Question"):
         user_uploaded_voice_input = transcribe_uploaded_audio()
         if user_uploaded_voice_input:
-            st.subheader("Transcription (Uploaded Audio):")
-            st.write(user_uploaded_voice_input)
             with st.spinner("Generating response... ⚙️"):
                 if 'encoded_image' in locals():
                     ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
                 else:
                     ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
-                st.subheader("AI Response:")
-                st.write(ai_uploaded_voice_response)
-                uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
-                play_audio(uploaded_voice_audio_base64)
+                st.session_state.responses.append((user_uploaded_voice_input, ai_uploaded_voice_response))
 
 if __name__ == "__main__":
     main()
