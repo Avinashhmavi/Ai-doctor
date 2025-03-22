@@ -85,53 +85,40 @@ def play_audio(audio_base64):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
 
-# Function to record voice input from microphone
-def record_voice_input():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("Recording... Speak your question now (5 seconds).")
-        try:
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
-            st.success("Recording complete. Processing...")
-            return recognizer.recognize_google(audio)
-        except sr.WaitTimeoutError:
-            st.error("No speech detected within 5 seconds.")
-            return None
-        except sr.UnknownValueError:
-            st.error("Could not understand the audio.")
-            return None
-        except sr.RequestError as e:
-            st.error(f"Could not request results from Google Speech Recognition service; {e}")
-            return None
-
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
     st.info("Upload an audio file (MP3 or WAV) for transcription:")
     uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3"], key="audio_uploader")
     
     if uploaded_audio is not None:
+        temp_wav_path = None
         try:
             # Convert uploaded file to WAV format using pydub
             audio_segment = AudioSegment.from_file(uploaded_audio)
             with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-                audio_segment.export(temp_wav.name, format="wav")
+                temp_wav_path = temp_wav.name
+                audio_segment.export(temp_wav_path, format="wav")
                 recognizer = sr.Recognizer()
-                with sr.AudioFile(temp_wav.name) as source:
+                with sr.AudioFile(temp_wav_path) as source:
                     audio_data = recognizer.record(source)
                     st.success("Audio uploaded successfully. Processing transcription...")
                     try:
                         transcribed_text = recognizer.recognize_google(audio_data)
-                        os.unlink(temp_wav.name)  # Clean up temporary file
+                        os.unlink(temp_wav_path)  # Clean up only if successful
                         return transcribed_text
                     except sr.UnknownValueError:
                         st.error("Could not understand the audio.")
+                        return None
                     except sr.RequestError as e:
                         st.error(f"Could not request results from Google Speech Recognition service; {e}")
+                        return None
         except Exception as e:
             st.error(f"Error processing uploaded audio file: {e}")
+            return None
         finally:
-            if 'temp_wav' in locals():
-                os.unlink(temp_wav.name)  # Ensure cleanup even on error
+            # Clean up only if the file exists and hasn’t been deleted yet
+            if temp_wav_path and os.path.exists(temp_wav_path):
+                os.unlink(temp_wav_path)
     return None
 
 # Streamlit App
@@ -157,7 +144,7 @@ def main():
         play_audio(audio_base64)
 
     # Interaction Section
-    st.subheader("Ask a question (Text, Voice, or Upload Audio)")
+    st.subheader("Ask a question (Text or Upload Audio)")
 
     # Text Input for Questions
     user_text_input = st.text_input("Type your question here:")
@@ -173,22 +160,6 @@ def main():
         st.write(ai_response)
         response_audio_base64 = text_to_speech(ai_response)
         play_audio(response_audio_base64)
-
-    # Voice Input for Questions (Microphone)
-    st.subheader("Or record your question using your microphone:")
-    if st.button("Start Recording"):
-        user_voice_input = record_voice_input()
-        if user_voice_input:
-            st.subheader("Transcription (Voice Input):")
-            st.write(user_voice_input)
-            if encoded_image:
-                ai_voice_response = analyze_image_and_voice(user_voice_input, model, encoded_image)
-            else:
-                ai_voice_response = generate_ai_response(user_voice_input)
-            st.subheader("AI Response:")
-            st.write(ai_voice_response)
-            voice_audio_base64 = text_to_speech(ai_voice_response)
-            play_audio(voice_audio_base64)
 
     # Voice Input for Questions (Uploaded Audio)
     st.subheader("Or upload an audio file to ask a question:")
