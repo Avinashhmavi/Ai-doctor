@@ -16,50 +16,6 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Custom CSS for vibrant styling
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f0f4f8;
-        padding: 20px;
-        border-radius: 10px;
-    }
-    .stButton>button {
-        background-color: #ff6f61;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 20px;
-        font-weight: bold;
-    }
-    .stButton>button:hover {
-        background-color: #ff4f41;
-    }
-    .stTextInput>div>input {
-        border: 2px solid #4a90e2;
-        border-radius: 5px;
-        padding: 8px;
-    }
-    .stFileUploader>div {
-        border: 2px dashed #f4a261;
-        border-radius: 5px;
-        padding: 10px;
-        background-color: #fffcf2;
-    }
-    h1, h2, h3 {
-        color: #2a9d8f;
-        font-family: 'Arial', sans-serif;
-    }
-    .stSuccess {
-        background-color: #e9f7ef;
-        color: #27ae60;
-    }
-    .stError {
-        background-color: #ffe6e6;
-        color: #c0392b;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Function to encode image to base64
 def encode_image(image):
     return base64.b64encode(image.read()).decode('utf-8')
@@ -166,64 +122,59 @@ def transcribe_uploaded_audio():
     return None
 
 # Streamlit App
-# Streamlit App
 def main():
-    st.title("🧑‍⚕️🩺 AI Doctor 2.0: Voice and Vision")
-    st.markdown("Welcome to your vibrant AI health assistant! 🌟", unsafe_allow_html=True)
+    st.title("🧑‍⚕️🩺AI Doctor 2.0: Voice and Vision")
+    
+    uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"], key="image_uploader")
+    encoded_image = None
+    
+    if uploaded_image is not None:
+        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+        encoded_image = encode_image(uploaded_image)
 
-    # Image Upload Section
-    with st.expander("📸 Upload an Image for Analysis", expanded=True):
-        uploaded_image = st.file_uploader("Drop your image here", type=["jpg", "jpeg", "png"], key="image_uploader")
-        if uploaded_image is not None:
-            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
-            encoded_image = encode_image(uploaded_image)
+        # Initial image analysis
+        st.subheader("AI Image Analysis:")
+        initial_query = "Describe the condition in this image."
+        model = "llama-3.2-90b-vision-preview"
+        analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
+        st.write(analysis_result)
 
-            with st.spinner("Analyzing image... 🔍"):
-                st.subheader("AI Image Analysis:")
-                initial_query = "Describe the condition in this image."
-                model = "llama-3.2-90b-vision-preview"
-                analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
-                st.write(analysis_result)
-                audio_base64 = text_to_speech(analysis_result)
-                play_audio(audio_base64)
+        # Convert analysis result to speech and play automatically with controls
+        audio_base64 = text_to_speech(analysis_result)
+        play_audio(audio_base64)
 
     # Interaction Section
-    st.markdown("---")
-    st.subheader("💬 Ask a Question (Text or Upload Audio)")
+    st.subheader("Ask a question (Text or Upload Audio)")
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?")
-    with col2:
-        if st.button("Submit", key="text_submit"):
-            if user_text_input:
-                with st.spinner("Generating response... ⚙️"):
-                    if 'encoded_image' in locals():
-                        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
-                    else:
-                        ai_response = generate_ai_response(user_text_input)
-                    st.subheader("AI Response:")
-                    st.write(ai_response)
-                    response_audio_base64 = text_to_speech(ai_response)
-                    play_audio(response_audio_base64)
-            else:
-                st.warning("Please enter a question! ⚠️")
+    # Text Input for Questions
+    user_text_input = st.text_input("Type your question here:")
+    if user_text_input and encoded_image:
+        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
+    elif user_text_input:
+        ai_response = generate_ai_response(user_text_input)
+    else:
+        ai_response = None
 
-    # Audio Upload Section
-    with st.expander("🎙️ Upload an Audio Question"):
-        user_uploaded_voice_input = transcribe_uploaded_audio()
-        if user_uploaded_voice_input:
-            st.subheader("Transcription (Uploaded Audio):")
-            st.write(user_uploaded_voice_input)
-            with st.spinner("Generating response... ⚙️"):
-                if 'encoded_image' in locals():
-                    ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
-                else:
-                    ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
-                st.subheader("AI Response:")
-                st.write(ai_uploaded_voice_response)
-                uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
-                play_audio(uploaded_voice_audio_base64)
+    if ai_response:
+        st.subheader("AI Response:")
+        st.write(ai_response)
+        response_audio_base64 = text_to_speech(ai_response)
+        play_audio(response_audio_base64)
+
+    # Voice Input for Questions (Uploaded Audio)
+    st.subheader("Or upload an audio file to ask a question:")
+    user_uploaded_voice_input = transcribe_uploaded_audio()
+    if user_uploaded_voice_input:
+        st.subheader("Transcription (Uploaded Audio):")
+        st.write(user_uploaded_voice_input)
+        if encoded_image:
+            ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
+        else:
+            ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
+        st.subheader("AI Response:")
+        st.write(ai_uploaded_voice_response)
+        uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
+        play_audio(uploaded_voice_audio_base64)
 
 if __name__ == "__main__":
     main()
