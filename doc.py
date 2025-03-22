@@ -16,6 +16,50 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
+# Custom CSS for vibrant styling
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f0f4f8;
+        padding: 20px;
+        border-radius: 10px;
+    }
+    .stButton>button {
+        background-color: #ff6f61;
+        color: white;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-weight: bold;
+    }
+    .stButton>button:hover {
+        background-color: #ff4f41;
+    }
+    .stTextInput>div>input {
+        border: 2px solid #4a90e2;
+        border-radius: 5px;
+        padding: 8px;
+    }
+    .stFileUploader>div {
+        border: 2px dashed #f4a261;
+        border-radius: 5px;
+        padding: 10px;
+        background-color: #fffcf2;
+    }
+    h1, h2, h3 {
+        color: #2a9d8f;
+        font-family: 'Arial', sans-serif;
+    }
+    .stSuccess {
+        background-color: #e9f7ef;
+        color: #27ae60;
+    }
+    .stError {
+        background-color: #ffe6e6;
+        color: #c0392b;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Function to encode image to base64
 def encode_image(image):
     return base64.b64encode(image.read()).decode('utf-8')
@@ -56,7 +100,7 @@ def clean_text_for_speech(text):
 # Function to convert AI response to speech using gTTS and return base64 audio
 def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion.")
+        st.error("Invalid input text for speech conversion. 🚫")
         return None
     
     cleaned_text = clean_text_for_speech(input_text)
@@ -71,7 +115,7 @@ def text_to_speech(input_text):
             os.unlink(temp_file.name)
             return audio_base64
     except Exception as e:
-        st.error(f"Error during text-to-speech conversion with gTTS: {e}")
+        st.error(f"Error during text-to-speech conversion: {e} 🚨")
         return None
 
 # Function to play audio automatically with controls
@@ -87,94 +131,96 @@ def play_audio(audio_base64):
 
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
-    st.info("Upload an audio file (MP3 or WAV) for transcription:")
+    st.info("Upload an audio file (MP3 or WAV) for transcription: 🎤")
     uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3"], key="audio_uploader")
     
     if uploaded_audio is not None:
         temp_wav_path = None
         try:
-            # Convert uploaded file to WAV format using pydub
-            audio_segment = AudioSegment.from_file(uploaded_audio)
-            with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-                temp_wav_path = temp_wav.name
-                audio_segment.export(temp_wav_path, format="wav")
-                recognizer = sr.Recognizer()
-                with sr.AudioFile(temp_wav_path) as source:
-                    audio_data = recognizer.record(source)
-                    st.success("Audio uploaded successfully. Processing transcription...")
-                    try:
+            with st.spinner("Processing audio... ⏳"):
+                audio_segment = AudioSegment.from_file(uploaded_audio)
+                with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
+                    temp_wav_path = temp_wav.name
+                    audio_segment.export(temp_wav_path, format="wav")
+                    recognizer = sr.Recognizer()
+                    with sr.AudioFile(temp_wav_path) as source:
+                        audio_data = recognizer.record(source)
+                        st.success("Audio uploaded successfully. Processing transcription... ✅")
                         transcribed_text = recognizer.recognize_google(audio_data)
-                        os.unlink(temp_wav_path)  # Clean up only if successful
+                        os.unlink(temp_wav_path)
                         return transcribed_text
-                    except sr.UnknownValueError:
-                        st.error("Could not understand the audio.")
-                        return None
-                    except sr.RequestError as e:
-                        st.error(f"Could not request results from Google Speech Recognition service; {e}")
-                        return None
+        except sr.UnknownValueError:
+            st.error("Could not understand the audio. 😕")
+            return None
+        except sr.RequestError as e:
+            st.error(f"Could not request results from Google Speech Recognition service: {e} 🚨")
+            return None
         except Exception as e:
-            st.error(f"Error processing uploaded audio file: {e}")
+            st.error(f"Error processing uploaded audio file: {e} 🚫")
             return None
         finally:
-            # Clean up only if the file exists and hasn’t been deleted yet
             if temp_wav_path and os.path.exists(temp_wav_path):
                 os.unlink(temp_wav_path)
     return None
 
 # Streamlit App
 def main():
-    st.title("🧑‍⚕️🩺AI Doctor 2.0: Voice and Vision")
-    
-    uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"], key="image_uploader")
-    encoded_image = None
-    
-    if uploaded_image is not None:
-        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
-        encoded_image = encode_image(uploaded_image)
+    st.title("🧑‍⚕️🩺 AI Doctor 2.0: Voice and Vision")
+    st.markdown("Welcome to your vibrant AI health assistant! 🌟", unsafe_allow_html=True)
 
-        # Initial image analysis
-        st.subheader("AI Image Analysis:")
-        initial_query = "Describe the condition in this image."
-        model = "llama-3.2-90b-vision-preview"
-        analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
-        st.write(analysis_result)
+    # Image Upload Section
+    with st.expander("📸 Upload an Image for Analysis", expanded=True):
+        uploaded_image = st.file_uploader("Drop your image here", type=["jpg", "jpeg", "png"], key="image_uploader")
+        if uploaded_image is not None:
+            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+            encoded_image = encode_image(uploaded_image)
 
-        # Convert analysis result to speech and play automatically with controls
-        audio_base64 = text_to_speech(analysis_result)
-        play_audio(audio_base64)
+            with st.spinner("Analyzing image... 🔍"):
+                st.subheader("AI Image Analysis:")
+                initial_query = "Describe the condition in this image."
+                model = "llama-3.2-90b-vision-preview"
+                analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
+                st.write(analysis_result)
+                audio_base64 = text_to_speech(analysis_result)
+                play_audio(audio_base64)
 
     # Interaction Section
-    st.subheader("Ask a question (Text or Upload Audio)")
+    st.markdown("---")
+    st.subheader("💬 Ask a Question (Text or Upload Audio)")
 
-    # Text Input for Questions
-    user_text_input = st.text_input("Type your question here:")
-    if user_text_input and encoded_image:
-        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
-    elif user_text_input:
-        ai_response = generate_ai_response(user_text_input)
-    else:
-        ai_response = None
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?")
+    with col2:
+        if st.button("Submit", key="text_submit"):
+            if user_text_input:
+                with st.spinner("Generating response... ⚙️"):
+                    if 'encoded_image' in locals():
+                        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
+                    else:
+                        ai_response = generate_ai_response(user_text_input)
+                    st.subheader("AI Response:")
+                    st.write(ai_response)
+                    response_audio_base64 = text_to_speech(ai_response)
+                    play_audio(response_audio_base64)
+            else:
+                st.warning("Please enter a question! ⚠️")
 
-    if ai_response:
-        st.subheader("AI Response:")
-        st.write(ai_response)
-        response_audio_base64 = text_to_speech(ai_response)
-        play_audio(response_audio_base64)
-
-    # Voice Input for Questions (Uploaded Audio)
-    st.subheader("Or upload an audio file to ask a question:")
-    user_uploaded_voice_input = transcribe_uploaded_audio()
-    if user_uploaded_voice_input:
-        st.subheader("Transcription (Uploaded Audio):")
-        st.write(user_uploaded_voice_input)
-        if encoded_image:
-            ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
-        else:
-            ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
-        st.subheader("AI Response:")
-        st.write(ai_uploaded_voice_response)
-        uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
-        play_audio(uploaded_voice_audio_base64)
+    # Audio Upload Section
+    with st.expander("🎙️ Upload an Audio Question"):
+        user_uploaded_voice_input = transcribe_uploaded_audio()
+        if user_uploaded_voice_input:
+            st.subheader("Transcription (Uploaded Audio):")
+            st.write(user_uploaded_voice_input)
+            with st.spinner("Generating response... ⚙️"):
+                if 'encoded_image' in locals():
+                    ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
+                else:
+                    ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
+                st.subheader("AI Response:")
+                st.write(ai_uploaded_voice_response)
+                uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
+                play_audio(uploaded_voice_audio_base64)
 
 if __name__ == "__main__":
     main()
