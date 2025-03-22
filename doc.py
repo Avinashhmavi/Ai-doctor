@@ -196,15 +196,17 @@ def main():
     st.markdown("---")
     st.subheader("💬 Ask a Question (Text or Upload Audio)")
 
-    # Use session state to store responses and manage input
+    # Use session state to store responses and input counter
     if 'responses' not in st.session_state:
         st.session_state.responses = []
+    if 'input_counter' not in st.session_state:
+        st.session_state.input_counter = 0
 
     col1, col2 = st.columns([2, 1])
     with col1:
-        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?", key="text_input")
+        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?", key=f"text_input_{st.session_state.input_counter}")
     with col2:
-        if st.button("Submit", key="text_submit"):
+        if st.button("Submit", key=f"text_submit_{st.session_state.input_counter}"):
             if user_text_input:
                 with st.spinner("Generating response... ⚙️"):
                     if 'encoded_image' in locals():
@@ -212,8 +214,10 @@ def main():
                     else:
                         ai_response = generate_ai_response(user_text_input)
                     st.session_state.responses.append((user_text_input, ai_response))
-                    # Clear the input by resetting the key (Streamlit will generate a new widget)
-                    st.session_state.text_input = ""
+                    # Increment counter to create a new input widget
+                    st.session_state.input_counter += 1
+            else:
+                st.warning("Please enter a question! ⚠️")
 
     # Display previous responses
     for i, (question, response) in enumerate(st.session_state.responses):
