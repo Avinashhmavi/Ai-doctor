@@ -16,7 +16,7 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Custom CSS for vibrant styling and centering AI response
+# Custom CSS for vibrant styling
 st.markdown("""
     <style>
     .main {
@@ -56,14 +56,6 @@ st.markdown("""
     .stError {
         background-color: #ffe6e6;
         color: #c0392b;
-    }
-    .ai-response {
-        text-align: center;
-        margin: 20px 0;
-    }
-    .ai-response audio {
-        display: block;
-        margin: 10px auto;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -108,7 +100,7 @@ def clean_text_for_speech(text):
 # Function to convert AI response to speech using gTTS and return base64 audio
 def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion. 🚫")
+        st.error("Invalid input text for speech conversion.")
         return None
     
     cleaned_text = clean_text_for_speech(input_text)
@@ -123,7 +115,7 @@ def text_to_speech(input_text):
             os.unlink(temp_file.name)
             return audio_base64
     except Exception as e:
-        st.error(f"Error during text-to-speech conversion: {e} 🚨")
+        st.error(f"Error during text-to-speech conversion with gTTS: {e}")
         return None
 
 # Function to play audio automatically with controls
@@ -139,38 +131,41 @@ def play_audio(audio_base64):
 
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
-    st.info("Upload an audio file (MP3 or WAV) for transcription: 🎤")
+    st.info("Upload an audio file (MP3 or WAV) for transcription:")
     uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3"], key="audio_uploader")
     
     if uploaded_audio is not None:
         temp_wav_path = None
         try:
-            with st.spinner("Processing audio... ⏳"):
-                audio_segment = AudioSegment.from_file(uploaded_audio)
-                with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-                    temp_wav_path = temp_wav.name
-                    audio_segment.export(temp_wav_path, format="wav")
-                    recognizer = sr.Recognizer()
-                    with sr.AudioFile(temp_wav_path) as source:
-                        audio_data = recognizer.record(source)
-                        st.success("Audio uploaded successfully. Processing transcription... ✅")
+            # Convert uploaded file to WAV format using pydub
+            audio_segment = AudioSegment.from_file(uploaded_audio)
+            with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
+                temp_wav_path = temp_wav.name
+                audio_segment.export(temp_wav_path, format="wav")
+                recognizer = sr.Recognizer()
+                with sr.AudioFile(temp_wav_path) as source:
+                    audio_data = recognizer.record(source)
+                    st.success("Audio uploaded successfully. Processing transcription...")
+                    try:
                         transcribed_text = recognizer.recognize_google(audio_data)
-                        os.unlink(temp_wav_path)
+                        os.unlink(temp_wav_path)  # Clean up only if successful
                         return transcribed_text
-        except sr.UnknownValueError:
-            st.error("Could not understand the audio. 😕")
-            return None
-        except sr.RequestError as e:
-            st.error(f"Could not request results from Google Speech Recognition service: {e} 🚨")
-            return None
+                    except sr.UnknownValueError:
+                        st.error("Could not understand the audio.")
+                        return None
+                    except sr.RequestError as e:
+                        st.error(f"Could not request results from Google Speech Recognition service; {e}")
+                        return None
         except Exception as e:
-            st.error(f"Error processing uploaded audio file: {e} 🚫")
+            st.error(f"Error processing uploaded audio file: {e}")
             return None
         finally:
+            # Clean up only if the file exists and hasn’t been deleted yet
             if temp_wav_path and os.path.exists(temp_wav_path):
                 os.unlink(temp_wav_path)
     return None
 
+# Streamlit App
 # Streamlit App
 def main():
     st.title("🧑‍⚕️🩺 AI Doctor 2.0: Voice and Vision")
@@ -188,7 +183,7 @@ def main():
                 initial_query = "Describe the condition in this image."
                 model = "llama-3.2-90b-vision-preview"
                 analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
-                st.markdown(f'<div class="ai-response">{analysis_result}</div>', unsafe_allow_html=True)
+                st.write(analysis_result)
                 audio_base64 = text_to_speech(analysis_result)
                 play_audio(audio_base64)
 
@@ -196,47 +191,39 @@ def main():
     st.markdown("---")
     st.subheader("💬 Ask a Question (Text or Upload Audio)")
 
-    # Use session state to store responses and input counter
-    if 'responses' not in st.session_state:
-        st.session_state.responses = []
-    if 'input_counter' not in st.session_state:
-        st.session_state.input_counter = 0
-
     col1, col2 = st.columns([2, 1])
     with col1:
-        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?", key=f"text_input_{st.session_state.input_counter}")
+        user_text_input = st.text_input("Type your question here:", placeholder="e.g., What’s my diagnosis?")
     with col2:
-        if st.button("Submit", key=f"text_submit_{st.session_state.input_counter}"):
+        if st.button("Submit", key="text_submit"):
             if user_text_input:
                 with st.spinner("Generating response... ⚙️"):
                     if 'encoded_image' in locals():
                         ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
                     else:
                         ai_response = generate_ai_response(user_text_input)
-                    st.session_state.responses.append((user_text_input, ai_response))
-                    # Increment counter to create a new input widget
-                    st.session_state.input_counter += 1
+                    st.subheader("AI Response:")
+                    st.write(ai_response)
+                    response_audio_base64 = text_to_speech(ai_response)
+                    play_audio(response_audio_base64)
             else:
                 st.warning("Please enter a question! ⚠️")
-
-    # Display previous responses
-    for i, (question, response) in enumerate(st.session_state.responses):
-        st.markdown(f"**Q{i+1}:** {question}")
-        st.markdown(f'<div class="ai-response">{response}</div>', unsafe_allow_html=True)
-        audio_base64 = text_to_speech(response)
-        play_audio(audio_base64)
-        st.markdown("---")
 
     # Audio Upload Section
     with st.expander("🎙️ Upload an Audio Question"):
         user_uploaded_voice_input = transcribe_uploaded_audio()
         if user_uploaded_voice_input:
+            st.subheader("Transcription (Uploaded Audio):")
+            st.write(user_uploaded_voice_input)
             with st.spinner("Generating response... ⚙️"):
                 if 'encoded_image' in locals():
                     ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
                 else:
                     ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
-                st.session_state.responses.append((user_uploaded_voice_input, ai_uploaded_voice_response))
+                st.subheader("AI Response:")
+                st.write(ai_uploaded_voice_response)
+                uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
+                play_audio(uploaded_voice_audio_base64)
 
 if __name__ == "__main__":
     main()
