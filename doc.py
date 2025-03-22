@@ -6,7 +6,6 @@ from groq import Groq
 from gtts import gTTS
 import elevenlabs
 import speech_recognition as sr
-from tempfile import NamedTemporaryFile
 
 # Load environment variables
 load_dotenv()
@@ -49,38 +48,17 @@ def generate_ai_response(user_query):
     return chat_completion.choices[0].message.content
 
 # Function to convert AI response to speech using ElevenLabs
-def text_to_speech(input_text, output_filename):
-    if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion.")
-        return None
-    
-    try:
-        # Generate audio
-        audio = elevenlabs_client.generate(
-            text=input_text,
-            voice="Aria",
-            output_format="mp3_22050_32",
-            model="eleven_turbo_v2"
-        )
-        # Use a temporary file for Streamlit Cloud compatibility
-        with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
-            elevenlabs.save(audio, temp_file.name)
-            return temp_file.name
-    except elevenlabs.core.api_error.ApiError as e:
-        st.error(f"ElevenLabs API Error: {e.status_code} - {e.body}")
-        # Optional fallback to gTTS (uncomment if desired)
-        # tts = gTTS(text=input_text, lang='en')
-        # tts.save(output_filename)
-        # return output_filename
-        return None
-    except Exception as e:
-        st.error(f"Unexpected error during text-to-speech conversion: {e}")
-        return None
+def text_to_speech(input_text, output_filepath):
+    audio = elevenlabs_client.generate(
+        text=input_text, voice="Aria", output_format="mp3_22050_32", model="eleven_turbo_v2"
+    )
+    elevenlabs.save(audio, output_filepath)
+    return output_filepath
 
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
     st.info("Upload an audio file for transcription:")
-    uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3", "m4a"], key="audio_uploader")
+    uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3", "m4a"])
     
     if uploaded_audio is not None:
         recognizer = sr.Recognizer()
@@ -93,13 +71,14 @@ def transcribe_uploaded_audio():
                 st.error("Could not understand the audio.")
             except sr.RequestError as e:
                 st.error(f"Could not request results from Google Speech Recognition service; {e}")
-    return None
+    else:
+        return None
 
 # Streamlit App
 def main():
     st.title("🧑‍⚕️🩺AI Doctor 2.0: Voice and Vision")
     
-    uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"], key="image_uploader")
+    uploaded_image = st.file_uploader("Upload an image for analysis", type=["jpg", "jpeg", "png"])
     encoded_image = None
     
     if uploaded_image is not None:
@@ -115,9 +94,7 @@ def main():
 
         # Convert analysis result to speech
         audio_path = text_to_speech(analysis_result, "ai_analysis.mp3")
-        if audio_path:
-            st.audio(audio_path)
-            os.unlink(audio_path)  # Clean up temporary file
+        st.audio(audio_path)
 
     # Interaction Section
     st.subheader("Ask a question (Text or Voice)")
@@ -137,9 +114,7 @@ def main():
 
         # Convert response to speech
         response_audio_path = text_to_speech(ai_response, "ai_response.mp3")
-        if response_audio_path:
-            st.audio(response_audio_path)
-            os.unlink(response_audio_path)  # Clean up temporary file
+        st.audio(response_audio_path)
 
     # Voice Input for Questions (Using Uploaded Audio)
     st.subheader("Or upload an audio file to ask a question:")
@@ -159,9 +134,7 @@ def main():
 
         # Convert response to speech
         voice_audio_path = text_to_speech(ai_voice_response, "ai_voice_response.mp3")
-        if voice_audio_path:
-            st.audio(voice_audio_path)
-            os.unlink(voice_audio_path)  # Clean up temporary file
+        st.audio(voice_audio_path)
 
 if __name__ == "__main__":
     main()
