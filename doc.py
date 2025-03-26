@@ -21,12 +21,44 @@ def encode_image(image):
     return base64.b64encode(image.read()).decode('utf-8')
 
 # Function to analyze image and voice input together
-def analyze_image_and_voice(user_query, model, encoded_image):
+def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysis=True):
+    if is_initial_analysis:
+        # Define the medical imaging query for initial analysis
+        medical_query = """
+You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes traditional medical imaging (e.g., X-ray, MRI, CT, ultrasound) as well as clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, or other physical signs of illness that a doctor might review. If the image is not medical-related (e.g., a landscape or unrelated object), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." If it is medical-related, analyze the image as follows:
+### Key Findings
+- List primary observations systematically (e.g., presence of lesions, redness, swelling)
+- Note any abnormalities with precise descriptions (e.g., type, color, distribution, texture)
+- Include measurements if applicable (e.g., size of lesions in mm)
+- Describe location, size, shape, and characteristics of findings
+- Rate severity: Normal/Mild/Moderate/Severe
+
+### Diagnostic
+- Provide a primary diagnosis with confidence level (e.g., 90% confidence)
+- List differential diagnoses in order of likelihood
+- Support each diagnosis with observed evidence from the image
+- Note any critical or urgent findings (e.g., signs of infection requiring immediate attention)
+
+### Explanation
+- Explain the findings in simple, clear language that a patient can understand
+- Avoid medical jargon or provide clear definitions (e.g., "inflammation" means redness and swelling)
+- Include visual analogies if helpful (e.g., "the spots look like small red dots, similar to freckles but raised")
+- Address common patient concerns related to these findings (e.g., "Is this contagious?" or "Will it go away on its own?")
+
+Format your response using clear markdown headers and bullet points. Be concise yet thorough.
+"""
+        full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
+    else:
+        # For follow-up questions, use a simpler prompt focused on answering the question directly
+        full_query = f"""
+You are a doctor. The patient has already been diagnosed with acne vulgaris based on a clinical photograph of their face showing multiple red, inflamed papules and pustules, rated as moderate to severe. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as a doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly.
+"""
+
     messages = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": user_query},
+                {"type": "text", "text": full_query},
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"},
@@ -93,7 +125,6 @@ def transcribe_uploaded_audio():
     if uploaded_audio is not None:
         temp_wav_path = None
         try:
-            # Convert uploaded file to WAV format using pydub
             audio_segment = AudioSegment.from_file(uploaded_audio)
             with NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
                 temp_wav_path = temp_wav.name
@@ -104,7 +135,7 @@ def transcribe_uploaded_audio():
                     st.success("Audio uploaded successfully. Processing transcription...")
                     try:
                         transcribed_text = recognizer.recognize_google(audio_data)
-                        os.unlink(temp_wav_path)  # Clean up only if successful
+                        os.unlink(temp_wav_path)
                         return transcribed_text
                     except sr.UnknownValueError:
                         st.error("Could not understand the audio.")
@@ -116,7 +147,6 @@ def transcribe_uploaded_audio():
             st.error(f"Error processing uploaded audio file: {e}")
             return None
         finally:
-            # Clean up only if the file exists and hasn’t been deleted yet
             if temp_wav_path and os.path.exists(temp_wav_path):
                 os.unlink(temp_wav_path)
     return None
@@ -130,14 +160,14 @@ def main():
     encoded_image = None
     
     if uploaded_image is not None:
-        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+        st.image(uploaded_image, caption="Uploaded Image", use_container_width=True)  # Updated to use_container_width
         encoded_image = encode_image(uploaded_image)
 
         # Initial image analysis
         st.subheader("AI Image Analysis:")
         initial_query = "Describe the condition in this image."
         model = "llama-3.2-90b-vision-preview"
-        analysis_result = analyze_image_and_voice(initial_query, model, encoded_image)
+        analysis_result = analyze_image_and_voice(initial_query, model, encoded_image, is_initial_analysis=True)
         st.write(analysis_result)
 
         # Convert analysis result to speech and play automatically with controls
@@ -150,7 +180,7 @@ def main():
     # Text Input for Questions
     user_text_input = st.text_input("Type your question here:")
     if user_text_input and encoded_image:
-        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image)
+        ai_response = analyze_image_and_voice(user_text_input, model, encoded_image, is_initial_analysis=False)
     elif user_text_input:
         ai_response = generate_ai_response(user_text_input)
     else:
@@ -169,7 +199,7 @@ def main():
         st.subheader("Transcription (Uploaded Audio):")
         st.write(user_uploaded_voice_input)
         if encoded_image:
-            ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image)
+            ai_uploaded_voice_response = analyze_image_and_voice(user_uploaded_voice_input, model, encoded_image, is_initial_analysis=False)
         else:
             ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
         st.subheader("AI Response:")
