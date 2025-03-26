@@ -16,9 +16,11 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Initialize session state for storing the diagnosis
+# Initialize session state for storing the diagnosis and response count
 if "diagnosis" not in st.session_state:
     st.session_state.diagnosis = None
+if "response_count" not in st.session_state:
+    st.session_state.response_count = 0
 
 # Function to encode image to base64
 def encode_image(image):
@@ -26,47 +28,41 @@ def encode_image(image):
 
 # Function to extract diagnosis from the analysis result
 def extract_diagnosis(analysis_result):
-    # Look for "Primary Diagnosis" or similar phrases
     lines = analysis_result.split('\n')
     for line in lines:
         if "Primary Diagnosis" in line or "Diagnosis:" in line or "Diagnostic Assessment" in line:
-            # Extract the diagnosis text after the colon or header
             diagnosis = line.split(":", 1)[1].strip() if ":" in line else lines[lines.index(line) + 1].strip()
-            # Remove confidence level if present
             diagnosis = re.sub(r'\(.*?confidence\)', '', diagnosis).strip()
             return diagnosis
-    # Fallback: look for the first line after "Diagnostic" or "Key Findings"
     for i, line in enumerate(lines):
         if "Diagnostic" in line or "Key Findings" in line:
             for j in range(i + 1, len(lines)):
                 if lines[j].strip() and not lines[j].startswith("- Alternative"):
                     return lines[j].strip()
-    # If still not found, return a generic message
     return "a medical condition based on the image analysis"
 
 # Function to analyze image and voice input together
 def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysis=True):
     if is_initial_analysis:
-        # Define the medical imaging query for initial analysis
         medical_query = """
 You are a highly skilled medical imaging expert. Analyze the uploaded medical image as follows:
 
-### 1. Image Type & Region
+###  Image Type & Region
 - Specify the type of image (e.g., CT scan, X-ray, MRI)
 - Identify the anatomical region (e.g., chest, brain) and view (e.g., axial)
 - Comment on image quality
 
-### 2. Key Findings
+### Key Findings
 - List primary observations (e.g., normal lungs, no masses)
 - Note any abnormalities with details (e.g., size, location)
 - Rate severity: Normal/Mild/Moderate/Severe
 
-### 3. Diagnostic Assessment
+### Diagnostic Assessment
 - Provide a primary diagnosis with confidence level (e.g., 95% confidence)
 - List differential diagnoses if applicable
 - Support with evidence from the image
 
-### 4. Patient-Friendly Explanation
+### Patient-Friendly Explanation
 - Explain findings in simple language
 - Address common patient concerns (e.g., "What should I do next?")
 
@@ -74,7 +70,6 @@ Format your response with markdown headers and bullet points.
 """
         full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
     else:
-        # For follow-up questions, reference the stored diagnosis
         diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "a medical condition based on the image analysis"
         full_query = f"""
 You are an AI doctor. The patient has been diagnosed with {diagnosis}. The patient has asked: "{user_query}". Provide a concise, direct answer in simple language, referencing the image findings if relevant. Offer general treatment advice confidently as a doctor would.
@@ -97,7 +92,6 @@ You are an AI doctor. The patient has been diagnosed with {diagnosis}. The patie
     )
     response = chat_completion.choices[0].message.content
     if is_initial_analysis:
-        # Store the diagnosis in session state
         st.session_state.diagnosis = extract_diagnosis(response)
     return response
 
@@ -116,14 +110,14 @@ def clean_text_for_speech(text):
     return cleaned_text
 
 # Function to convert text to speech
-def text_to_speech(input_text):
+def text_to_speech(input_text, response_key):
     if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion.")
+        st.error(f"Invalid input text for speech conversion (Response {response_key}).")
         return None
     
     cleaned_text = clean_text_for_speech(input_text)
     if not cleaned_text:
-        st.error("Text after cleaning is empty.")
+        st.error(f"Text after cleaning is empty (Response {response_key}).")
         return None
     
     try:
@@ -136,7 +130,7 @@ def text_to_speech(input_text):
             os.unlink(temp_file.name)
             return audio_base64
     except Exception as e:
-        st.error(f"Error during text-to-speech conversion: {e}")
+        st.error(f"Error during text-to-speech conversion (Response {response_key}): {e}")
         return None
 
 # Function to play audio
@@ -150,7 +144,7 @@ def play_audio(audio_base64, response_key):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
     else:
-        st.warning("Audio could not be generated.")
+        st.warning(f"Audio could not be generated for response {response_key}.")
 
 # Function to transcribe uploaded audio
 def transcribe_uploaded_audio():
@@ -196,8 +190,9 @@ def main():
         st.write(analysis_result)
 
         # Convert analysis result to speech
-        audio_base64 = text_to_speech(analysis_result)
-        play_audio(audio_base64, "initial")
+        st.session_state.response_count += 1
+        audio_base64 = text_to_speech(analysis_result, st.session_state.response_count)
+        play_audio(audio_base64, st.session_state.response_count)
 
     # Interaction Section
     st.subheader("Ask a question (Text or Upload Audio)")
@@ -208,14 +203,16 @@ def main():
         ai_response = analyze_image_and_voice(user_text_input, model, encoded_image, is_initial_analysis=False)
         st.subheader("AI Response:")
         st.write(ai_response)
-        response_audio_base64 = text_to_speech(ai_response)
-        play_audio(response_audio_base64, "text_response")
+        st.session_state.response_count += 1
+        response_audio_base64 = text_to_speech(ai_response, st.session_state.response_count)
+        play_audio(response_audio_base64, st.session_state.response_count)
     elif user_text_input:
         ai_response = generate_ai_response(user_text_input)
         st.subheader("AI Response:")
         st.write(ai_response)
-        response_audio_base64 = text_to_speech(ai_response)
-        play_audio(response_audio_base64, "text_response_no_image")
+        st.session_state.response_count += 1
+        response_audio_base64 = text_to_speech(ai_response, st.session_state.response_count)
+        play_audio(response_audio_base64, st.session_state.response_count)
 
     # Voice Input for Questions (Uploaded Audio)
     st.subheader("Or upload an audio file to ask a question:")
@@ -229,8 +226,9 @@ def main():
             ai_uploaded_voice_response = generate_ai_response(user_uploaded_voice_input)
         st.subheader("AI Response:")
         st.write(ai_uploaded_voice_response)
-        uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
-        play_audio(uploaded_voice_audio_base64, "voice_response")
+        st.session_state.response_count += 1
+        uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response, st.session_state.response_count)
+        play_audio(uploaded_voice_audio_base64, st.session_state.response_count)
 
 if __name__ == "__main__":
     main()
