@@ -26,6 +26,7 @@ def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysi
         # Define the medical imaging query for initial analysis
         medical_query = """
 You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes traditional medical imaging (e.g., X-ray, MRI, CT, ultrasound) as well as clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, or other physical signs of illness that a doctor might review. If the image is not medical-related (e.g., a landscape or unrelated object), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." If it is medical-related, analyze the image as follows:
+
 ### Key Findings
 - List primary observations systematically (e.g., presence of lesions, redness, swelling)
 - Note any abnormalities with precise descriptions (e.g., type, color, distribution, texture)
@@ -33,13 +34,13 @@ You are a highly skilled medical imaging expert. First, determine if the uploade
 - Describe location, size, shape, and characteristics of findings
 - Rate severity: Normal/Mild/Moderate/Severe
 
-### Diagnostic
+### Diagnostic 
 - Provide a primary diagnosis with confidence level (e.g., 90% confidence)
 - List differential diagnoses in order of likelihood
 - Support each diagnosis with observed evidence from the image
 - Note any critical or urgent findings (e.g., signs of infection requiring immediate attention)
 
-### Explanation
+### Patient-Friendly Explanation
 - Explain the findings in simple, clear language that a patient can understand
 - Avoid medical jargon or provide clear definitions (e.g., "inflammation" means redness and swelling)
 - Include visual analogies if helpful (e.g., "the spots look like small red dots, similar to freckles but raised")
@@ -49,9 +50,9 @@ Format your response using clear markdown headers and bullet points. Be concise 
 """
         full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
     else:
-        # For follow-up questions, use a simpler prompt focused on answering the question directly
+        # For follow-up questions, use a prompt that ensures the AI acts as a doctor and provides advice confidently
         full_query = f"""
-You are a doctor. The patient has already been diagnosed with acne vulgaris based on a clinical photograph of their face showing multiple red, inflamed papules and pustules, rated as moderate to severe. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as a doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly.
+You are an AI doctor. The patient has already been diagnosed with acne vulgaris based on a clinical photograph of their face showing multiple red, inflamed papules and pustules, rated as moderate to severe. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as an AI doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly. Offer general treatment advice confidently, as a doctor would, and do not include disclaimers about not being able to give advice or prescriptions, since you are acting as an AI doctor in this context.
 """
 
     messages = [
@@ -160,7 +161,7 @@ def main():
     encoded_image = None
     
     if uploaded_image is not None:
-        st.image(uploaded_image, caption="Uploaded Image", use_container_width=True)  # Updated to use_container_width
+        st.image(uploaded_image, caption="Uploaded Image", use_container_width=True)
         encoded_image = encode_image(uploaded_image)
 
         # Initial image analysis
