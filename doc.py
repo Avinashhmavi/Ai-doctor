@@ -26,30 +26,38 @@ def encode_image(image):
 
 # Function to extract diagnosis from the analysis result
 def extract_diagnosis(analysis_result):
-    # Simple extraction: look for the "Primary Diagnosis" line
+    # Look for "Primary Diagnosis" in the analysis result
     lines = analysis_result.split('\n')
     for line in lines:
         if "Primary Diagnosis" in line:
             # Extract the diagnosis text (e.g., "Possible stroke or cerebral infarction (confidence level: 80%)")
             diagnosis = line.split(":", 1)[1].strip()
+            # Remove the confidence level for cleaner follow-up prompts
+            diagnosis = re.sub(r'\(confidence level:.*?\)', '', diagnosis).strip()
             return diagnosis
-    return "unknown condition"
+    # Fallback if "Primary Diagnosis" is not found
+    return "unknown medical condition"
 
 # Function to analyze image and voice input together
 def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysis=True):
     if is_initial_analysis:
-        # Define the medical imaging query for initial analysis
+        # Define the medical imaging query for initial analysis with clearer instructions
         medical_query = """
-You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes traditional medical imaging (e.g., X-ray, MRI, CT, ultrasound) as well as clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, or other physical signs of illness that a doctor might review. If the image is not medical-related (e.g., a landscape or unrelated object), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." If it is medical-related, analyze the image as follows:
+You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes:
+- Traditional medical imaging such as X-rays, MRIs, CT scans, ultrasounds, or PET scans.
+- Clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, infections, or other physical signs of illness that a doctor might review.
+- Images of medical reports, charts, or diagnostic results.
+
+If the image is not medical-related (e.g., a landscape, a random object, or something unrelated to healthcare), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." Do not end the conversation or refuse to proceed if the image is medical-related. If the image is medical-related, analyze it as follows:
 
 ###  Key Findings
-- List primary observations systematically (e.g., presence of lesions, redness, swelling)
+- List primary observations systematically (e.g., presence of lesions, dark areas, abnormalities)
 - Note any abnormalities with precise descriptions (e.g., type, color, distribution, texture)
 - Include measurements if applicable (e.g., size of lesions in mm)
 - Describe location, size, shape, and characteristics of findings
-- Rate severity: Normal/Mild/Moderate/Severe
+- Rate severity: Normal/Mild/Moderate/Severe (if applicable)
 
-### Diagnostic 
+### Diagnostic Assessment
 - Provide a primary diagnosis with confidence level (e.g., 90% confidence)
 - List differential diagnoses in order of likelihood
 - Support each diagnosis with observed evidence from the image
@@ -58,15 +66,15 @@ You are a highly skilled medical imaging expert. First, determine if the uploade
 ### Patient-Friendly Explanation
 - Explain the findings in simple, clear language that a patient can understand
 - Avoid medical jargon or provide clear definitions (e.g., "inflammation" means redness and swelling)
-- Include visual analogies if helpful (e.g., "the spots look like small red dots, similar to freckles but raised")
-- Address common patient concerns related to these findings (e.g., "Is this contagious?" or "Will it go away on its own?")
+- Include visual analogies if helpful (e.g., "the dark areas look like shadows where the brain isn’t working properly")
+- Address common patient concerns related to these findings (e.g., "Does this need urgent care?" or "What should I do next?")
 
 Format your response using clear markdown headers and bullet points. Be concise yet thorough.
 """
         full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
     else:
         # For follow-up questions, use a prompt that references the stored diagnosis
-        diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "unknown condition"
+        diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "unknown medical condition"
         full_query = f"""
 You are an AI doctor. The patient has already been diagnosed with {diagnosis} based on a medical image analysis. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as an AI doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly. Offer general treatment advice confidently, as a doctor would, and do not include disclaimers about not being able to give advice or prescriptions, since you are acting as an AI doctor in this context.
 """
@@ -109,10 +117,13 @@ def clean_text_for_speech(text):
 # Function to convert AI response to speech using gTTS and return base64 audio
 def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion.")
+        st.error("Invalid input text for speech conversion. Input must be a non-empty string.")
         return None
     
     cleaned_text = clean_text_for_speech(input_text)
+    if not cleaned_text:
+        st.error("Text after cleaning is empty. Cannot convert to speech.")
+        return None
     
     try:
         tts = gTTS(text=cleaned_text, lang='en')
@@ -128,15 +139,17 @@ def text_to_speech(input_text):
         return None
 
 # Function to play audio automatically with controls
-def play_audio(audio_base64):
+def play_audio(audio_base64, response_key):
     if audio_base64:
         audio_html = f"""
-        <audio autoplay controls>
+        <audio autoplay controls id="audio-{response_key}">
             <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
             Your browser does not support the audio element.
         </audio>
         """
         st.markdown(audio_html, unsafe_allow_html=True)
+    else:
+        st.warning("Audio could not be generated for this response.")
 
 # Function to transcribe uploaded audio file
 def transcribe_uploaded_audio():
@@ -193,25 +206,25 @@ def main():
 
         # Convert analysis result to speech and play automatically with controls
         audio_base64 = text_to_speech(analysis_result)
-        play_audio(audio_base64)
+        play_audio(audio_base64, "initial")
 
     # Interaction Section
     st.subheader("Ask a question (Text or Upload Audio)")
 
     # Text Input for Questions
-    user_text_input = st.text_input("Type your question here:")
+    user_text_input = st.text_input("Type your question here:", key="text_question")
     if user_text_input and encoded_image:
         ai_response = analyze_image_and_voice(user_text_input, model, encoded_image, is_initial_analysis=False)
-    elif user_text_input:
-        ai_response = generate_ai_response(user_text_input)
-    else:
-        ai_response = None
-
-    if ai_response:
         st.subheader("AI Response:")
         st.write(ai_response)
         response_audio_base64 = text_to_speech(ai_response)
-        play_audio(response_audio_base64)
+        play_audio(response_audio_base64, "text_response")
+    elif user_text_input:
+        ai_response = generate_ai_response(user_text_input)
+        st.subheader("AI Response:")
+        st.write(ai_response)
+        response_audio_base64 = text_to_speech(ai_response)
+        play_audio(response_audio_base64, "text_response_no_image")
 
     # Voice Input for Questions (Uploaded Audio)
     st.subheader("Or upload an audio file to ask a question:")
@@ -226,7 +239,7 @@ def main():
         st.subheader("AI Response:")
         st.write(ai_uploaded_voice_response)
         uploaded_voice_audio_base64 = text_to_speech(ai_uploaded_voice_response)
-        play_audio(uploaded_voice_audio_base64)
+        play_audio(uploaded_voice_audio_base64, "voice_response")
 
 if __name__ == "__main__":
     main()
