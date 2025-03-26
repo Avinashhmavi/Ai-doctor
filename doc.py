@@ -16,9 +16,24 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 # Initialize AI client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
+# Initialize session state for storing the diagnosis
+if "diagnosis" not in st.session_state:
+    st.session_state.diagnosis = None
+
 # Function to encode image to base64
 def encode_image(image):
     return base64.b64encode(image.read()).decode('utf-8')
+
+# Function to extract diagnosis from the analysis result
+def extract_diagnosis(analysis_result):
+    # Simple extraction: look for the "Primary Diagnosis" line
+    lines = analysis_result.split('\n')
+    for line in lines:
+        if "Primary Diagnosis" in line:
+            # Extract the diagnosis text (e.g., "Possible stroke or cerebral infarction (confidence level: 80%)")
+            diagnosis = line.split(":", 1)[1].strip()
+            return diagnosis
+    return "unknown condition"
 
 # Function to analyze image and voice input together
 def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysis=True):
@@ -27,7 +42,7 @@ def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysi
         medical_query = """
 You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes traditional medical imaging (e.g., X-ray, MRI, CT, ultrasound) as well as clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, or other physical signs of illness that a doctor might review. If the image is not medical-related (e.g., a landscape or unrelated object), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." If it is medical-related, analyze the image as follows:
 
-### Key Findings
+###  Key Findings
 - List primary observations systematically (e.g., presence of lesions, redness, swelling)
 - Note any abnormalities with precise descriptions (e.g., type, color, distribution, texture)
 - Include measurements if applicable (e.g., size of lesions in mm)
@@ -50,9 +65,10 @@ Format your response using clear markdown headers and bullet points. Be concise 
 """
         full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
     else:
-        # For follow-up questions, use a prompt that ensures the AI acts as a doctor and provides advice confidently
+        # For follow-up questions, use a prompt that references the stored diagnosis
+        diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "unknown condition"
         full_query = f"""
-You are an AI doctor. The patient has already been diagnosed with acne vulgaris based on a clinical photograph of their face showing multiple red, inflamed papules and pustules, rated as moderate to severe. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as an AI doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly. Offer general treatment advice confidently, as a doctor would, and do not include disclaimers about not being able to give advice or prescriptions, since you are acting as an AI doctor in this context.
+You are an AI doctor. The patient has already been diagnosed with {diagnosis} based on a medical image analysis. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as an AI doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly. Offer general treatment advice confidently, as a doctor would, and do not include disclaimers about not being able to give advice or prescriptions, since you are acting as an AI doctor in this context.
 """
 
     messages = [
@@ -70,7 +86,11 @@ You are an AI doctor. The patient has already been diagnosed with acne vulgaris 
     chat_completion = groq_client.chat.completions.create(
         messages=messages, model=model
     )
-    return chat_completion.choices[0].message.content
+    response = chat_completion.choices[0].message.content
+    if is_initial_analysis:
+        # Store the diagnosis in session state
+        st.session_state.diagnosis = extract_diagnosis(response)
+    return response
 
 # Function to generate AI response for text-only queries
 def generate_ai_response(user_query):
