@@ -26,57 +26,58 @@ def encode_image(image):
 
 # Function to extract diagnosis from the analysis result
 def extract_diagnosis(analysis_result):
-    # Look for "Primary Diagnosis" in the analysis result
+    # Look for "Primary Diagnosis" or similar phrases
     lines = analysis_result.split('\n')
     for line in lines:
-        if "Primary Diagnosis" in line:
-            # Extract the diagnosis text (e.g., "Possible stroke or cerebral infarction (confidence level: 80%)")
-            diagnosis = line.split(":", 1)[1].strip()
-            # Remove the confidence level for cleaner follow-up prompts
-            diagnosis = re.sub(r'\(confidence level:.*?\)', '', diagnosis).strip()
+        if "Primary Diagnosis" in line or "Diagnosis:" in line or "Diagnostic Assessment" in line:
+            # Extract the diagnosis text after the colon or header
+            diagnosis = line.split(":", 1)[1].strip() if ":" in line else lines[lines.index(line) + 1].strip()
+            # Remove confidence level if present
+            diagnosis = re.sub(r'\(.*?confidence\)', '', diagnosis).strip()
             return diagnosis
-    # Fallback if "Primary Diagnosis" is not found
-    return "unknown medical condition"
+    # Fallback: look for the first line after "Diagnostic" or "Key Findings"
+    for i, line in enumerate(lines):
+        if "Diagnostic" in line or "Key Findings" in line:
+            for j in range(i + 1, len(lines)):
+                if lines[j].strip() and not lines[j].startswith("- Alternative"):
+                    return lines[j].strip()
+    # If still not found, return a generic message
+    return "a medical condition based on the image analysis"
 
 # Function to analyze image and voice input together
 def analyze_image_and_voice(user_query, model, encoded_image, is_initial_analysis=True):
     if is_initial_analysis:
-        # Define the medical imaging query for initial analysis with clearer instructions
+        # Define the medical imaging query for initial analysis
         medical_query = """
-You are a highly skilled medical imaging expert. First, determine if the uploaded image is related to medical, hospital, or diagnostic purposes. This includes:
-- Traditional medical imaging such as X-rays, MRIs, CT scans, ultrasounds, or PET scans.
-- Clinical photographs showing visible medical conditions, such as dermatological issues (e.g., acne, rashes, lesions, or other skin abnormalities), wounds, infections, or other physical signs of illness that a doctor might review.
-- Images of medical reports, charts, or diagnostic results.
+You are a highly skilled medical imaging expert. Analyze the uploaded medical image as follows:
 
-If the image is not medical-related (e.g., a landscape, a random object, or something unrelated to healthcare), respond with: "Please insert only a medical image related to hospital or diagnostic purposes for a doctor to review." Do not end the conversation or refuse to proceed if the image is medical-related. If the image is medical-related, analyze it as follows:
+### 1. Image Type & Region
+- Specify the type of image (e.g., CT scan, X-ray, MRI)
+- Identify the anatomical region (e.g., chest, brain) and view (e.g., axial)
+- Comment on image quality
 
-###  Key Findings
-- List primary observations systematically (e.g., presence of lesions, dark areas, abnormalities)
-- Note any abnormalities with precise descriptions (e.g., type, color, distribution, texture)
-- Include measurements if applicable (e.g., size of lesions in mm)
-- Describe location, size, shape, and characteristics of findings
-- Rate severity: Normal/Mild/Moderate/Severe (if applicable)
+### 2. Key Findings
+- List primary observations (e.g., normal lungs, no masses)
+- Note any abnormalities with details (e.g., size, location)
+- Rate severity: Normal/Mild/Moderate/Severe
 
-### Diagnostic Assessment
-- Provide a primary diagnosis with confidence level (e.g., 90% confidence)
-- List differential diagnoses in order of likelihood
-- Support each diagnosis with observed evidence from the image
-- Note any critical or urgent findings (e.g., signs of infection requiring immediate attention)
+### 3. Diagnostic Assessment
+- Provide a primary diagnosis with confidence level (e.g., 95% confidence)
+- List differential diagnoses if applicable
+- Support with evidence from the image
 
-### Patient-Friendly Explanation
-- Explain the findings in simple, clear language that a patient can understand
-- Avoid medical jargon or provide clear definitions (e.g., "inflammation" means redness and swelling)
-- Include visual analogies if helpful (e.g., "the dark areas look like shadows where the brain isn’t working properly")
-- Address common patient concerns related to these findings (e.g., "Does this need urgent care?" or "What should I do next?")
+### 4. Patient-Friendly Explanation
+- Explain findings in simple language
+- Address common patient concerns (e.g., "What should I do next?")
 
-Format your response using clear markdown headers and bullet points. Be concise yet thorough.
+Format your response with markdown headers and bullet points.
 """
         full_query = medical_query + f"\n\nUser's additional query: {user_query}" if user_query else medical_query
     else:
-        # For follow-up questions, use a prompt that references the stored diagnosis
-        diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "unknown medical condition"
+        # For follow-up questions, reference the stored diagnosis
+        diagnosis = st.session_state.diagnosis if st.session_state.diagnosis else "a medical condition based on the image analysis"
         full_query = f"""
-You are an AI doctor. The patient has already been diagnosed with {diagnosis} based on a medical image analysis. The patient has asked: "{user_query}". Provide a concise, direct answer to their question in simple language, as an AI doctor would, without repeating the full image analysis. If the question requires referencing the image findings, do so briefly. Offer general treatment advice confidently, as a doctor would, and do not include disclaimers about not being able to give advice or prescriptions, since you are acting as an AI doctor in this context.
+You are an AI doctor. The patient has been diagnosed with {diagnosis}. The patient has asked: "{user_query}". Provide a concise, direct answer in simple language, referencing the image findings if relevant. Offer general treatment advice confidently as a doctor would.
 """
 
     messages = [
@@ -108,21 +109,21 @@ def generate_ai_response(user_query):
     )
     return chat_completion.choices[0].message.content
 
-# Function to clean text by removing special characters for speech
+# Function to clean text for speech
 def clean_text_for_speech(text):
     cleaned_text = re.sub(r'[,\;\*\(\)\[\]\{\}!?@#$%^&+=_"\'`~|]', '', text)
     cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
     return cleaned_text
 
-# Function to convert AI response to speech using gTTS and return base64 audio
+# Function to convert text to speech
 def text_to_speech(input_text):
     if not input_text or not isinstance(input_text, str):
-        st.error("Invalid input text for speech conversion. Input must be a non-empty string.")
+        st.error("Invalid input text for speech conversion.")
         return None
     
     cleaned_text = clean_text_for_speech(input_text)
     if not cleaned_text:
-        st.error("Text after cleaning is empty. Cannot convert to speech.")
+        st.error("Text after cleaning is empty.")
         return None
     
     try:
@@ -135,10 +136,10 @@ def text_to_speech(input_text):
             os.unlink(temp_file.name)
             return audio_base64
     except Exception as e:
-        st.error(f"Error during text-to-speech conversion with gTTS: {e}")
+        st.error(f"Error during text-to-speech conversion: {e}")
         return None
 
-# Function to play audio automatically with controls
+# Function to play audio
 def play_audio(audio_base64, response_key):
     if audio_base64:
         audio_html = f"""
@@ -149,13 +150,11 @@ def play_audio(audio_base64, response_key):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
     else:
-        st.warning("Audio could not be generated for this response.")
+        st.warning("Audio could not be generated.")
 
-# Function to transcribe uploaded audio file
+# Function to transcribe uploaded audio
 def transcribe_uploaded_audio():
-    st.info("Upload an audio file (MP3 or WAV) for transcription:")
     uploaded_audio = st.file_uploader("Choose an audio file", type=["wav", "mp3"], key="audio_uploader")
-    
     if uploaded_audio is not None:
         temp_wav_path = None
         try:
@@ -166,19 +165,11 @@ def transcribe_uploaded_audio():
                 recognizer = sr.Recognizer()
                 with sr.AudioFile(temp_wav_path) as source:
                     audio_data = recognizer.record(source)
-                    st.success("Audio uploaded successfully. Processing transcription...")
-                    try:
-                        transcribed_text = recognizer.recognize_google(audio_data)
-                        os.unlink(temp_wav_path)
-                        return transcribed_text
-                    except sr.UnknownValueError:
-                        st.error("Could not understand the audio.")
-                        return None
-                    except sr.RequestError as e:
-                        st.error(f"Could not request results from Google Speech Recognition service; {e}")
-                        return None
+                    transcribed_text = recognizer.recognize_google(audio_data)
+                    os.unlink(temp_wav_path)
+                    return transcribed_text
         except Exception as e:
-            st.error(f"Error processing uploaded audio file: {e}")
+            st.error(f"Error processing audio: {e}")
             return None
         finally:
             if temp_wav_path and os.path.exists(temp_wav_path):
@@ -204,7 +195,7 @@ def main():
         analysis_result = analyze_image_and_voice(initial_query, model, encoded_image, is_initial_analysis=True)
         st.write(analysis_result)
 
-        # Convert analysis result to speech and play automatically with controls
+        # Convert analysis result to speech
         audio_base64 = text_to_speech(analysis_result)
         play_audio(audio_base64, "initial")
 
